@@ -1,0 +1,70 @@
+WITH 
+meter_list AS (
+    SELECT meter_number 
+    FROM hes.meter_master 
+    WHERE meter_number IN ()
+),
+comm_meters AS (
+    SELECT meter_number 
+    FROM hes.meter_comm_time_info 
+    WHERE DATE(Last_comm) = CURRENT_DATE  
+    AND meter_number IN ()
+),
+non_comm_meters AS (
+    SELECT meter_number 
+    FROM hes.meter_comm_time_info 
+    WHERE DATE(Last_comm) != CURRENT_DATE  
+    AND meter_number IN ()
+),
+registered_today AS (  
+    SELECT meter_number 
+    FROM hes.hes_meter_comm_info 
+    WHERE DATE(TIME_STAMP) = CURRENT_DATE  
+    AND meter_number IN ()
+),
+dlp_data AS (  
+    SELECT 
+        meter_number, 
+        COUNT(*) AS DLP_Received
+    FROM hes.data_daily_load
+    WHERE load_time = '2025-02-25'
+    GROUP BY meter_number
+),
+blp_data AS (  
+    SELECT 
+        meter_number, 
+        COUNT(*) AS BLP_Received
+    FROM hes.data_block_load
+    WHERE load_time BETWEEN '2025-02-24 00:00:00' AND '2025-02-24 23:59:59'
+    GROUP BY meter_number
+)
+
+SELECT 
+    COUNT(DISTINCT ml.meter_number) AS total_meters,  
+
+    (COUNT(DISTINCT cm.meter_number) - COUNT(DISTINCT rt.meter_number)) AS comm_meters,  
+    COUNT(DISTINCT ncm.meter_number) AS non_comm_meters,  
+    COUNT(DISTINCT rt.meter_number) AS registered_today_meters,  
+
+    (COUNT(DISTINCT cm.meter_number) - COUNT(DISTINCT rt.meter_number)) AS total_dlp_expected,  
+    COALESCE(SUM(dlp.DLP_Received), 0) AS total_dlp_received,  
+    ROUND(
+        (COALESCE(SUM(dlp.DLP_Received), 0) * 100.0 / 
+        NULLIF((COUNT(DISTINCT cm.meter_number) - COUNT(DISTINCT rt.meter_number)), 0)),
+    2) AS dlp_success_percentage,
+
+
+    ((COUNT(DISTINCT cm.meter_number) - COUNT(DISTINCT rt.meter_number)) * 96) AS total_blp_expected,  
+    COALESCE(SUM(blp.BLP_Received), 0) AS total_blp_received,  
+    ROUND(
+        (COALESCE(SUM(blp.BLP_Received), 0) * 100.0 / 
+        NULLIF(((COUNT(DISTINCT cm.meter_number) - COUNT(DISTINCT rt.meter_number)) * 96), 0)),
+    2) AS blp_success_percentage
+
+FROM meter_list ml
+LEFT JOIN dlp_data dlp ON ml.meter_number = dlp.meter_number
+LEFT JOIN blp_data blp ON ml.meter_number = blp.meter_number
+LEFT JOIN comm_meters cm ON ml.meter_number = cm.meter_number
+LEFT JOIN non_comm_meters ncm ON ml.meter_number = ncm.meter_number
+LEFT JOIN registered_today rt ON ml.meter_number = rt.meter_number;
+
