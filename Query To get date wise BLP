@@ -1,0 +1,13 @@
+SELECT
+    meter_number,
+    COALESCE(MAX(CASE WHEN date = '2025-05-21' THEN block_load_total END), 0) AS "blp as on 21",
+    COALESCE(MAX(CASE WHEN date = '2025-05-22' THEN block_load_total END), 0) AS "blp as on 22",
+    COALESCE(MAX(CASE WHEN date = '2025-05-23' THEN block_load_total END), 0) AS "blp as on 23"
+FROM
+    hes.ca_data_block_load
+WHERE
+    meter_number IN ('00155664', '20121972', '00059868', '00195106', '20211751')
+GROUP BY
+    meter_number
+ORDER BY
+    meter_number;
