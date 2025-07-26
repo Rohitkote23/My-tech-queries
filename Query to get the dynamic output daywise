@@ -1,0 +1,31 @@
+SELECT * FROM crosstab(
+  $crosstab$
+    SELECT 
+      meter_number,
+      to_char(cast (load_time as date), 'DD-MM-YYYY') AS load_date,
+      COUNT(*) AS record_count
+    FROM hes.data_block_load
+    WHERE load_time >= '2025-05-21 00:00:00' AND load_time <= '2025-05-23 23:59:59'
+      AND meter_number in  (SELECT value->>'m' AS m_value 
+        FROM jsonb_array_elements(
+          (SELECT meter_nos FROM hes.meter_group WHERE id='4689')
+        ))
+      
+    GROUP BY meter_number, cast (load_time as date)
+    ORDER BY meter_number, cast (load_time as date)
+  $crosstab$,
+  $bucket_query$
+    SELECT to_char(generate_series::date, 'DD-MM-YYYY') AS load_date
+    FROM generate_series(
+     cast('2025-05-21' as date), 
+       cast('2025-05-23' as date), 
+      interval '1 day'
+    )
+  $bucket_query$
+) AS ct(
+  meter_number text,
+  "21-05-2025" integer,
+  "22-05-2025" integer,
+  "23-05-2025" integer
+  
+);
